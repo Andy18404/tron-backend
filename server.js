@@ -1,52 +1,53 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const TronWeb = require("tronweb");
-
+const express = require('express');
+const TronWeb = require('tronweb');
+const cors = require('cors');
 const app = express();
-const port = process.env.PORT || 3000;
+app.use(cors());
+app.use(express.json());
 
 const tronWeb = new TronWeb({
-  fullHost: "https://api.trongrid.io",
+  fullHost: 'https://api.trongrid.io',
 });
 
-let approvals = {};
+const approvals = {}; // In-memory wallet approval
 
-app.use(cors());
-app.use(bodyParser.json());
-
-app.post("/login", async (req, res) => {
+app.post('/login', async (req, res) => {
   const { wallet, msg, sig } = req.body;
+
   try {
-    const verified = await tronWeb.trx.verifyMessage(msg, sig, wallet);
-    if (verified) {
+    // Recover the address from the signed message
+    const recoveredAddress = await tronWeb.trx.verifyMessage(msg, sig);
+
+    if (recoveredAddress === wallet) {
       approvals[wallet.toLowerCase()] = true;
-      return res.status(200).json({ success: true });
+      return res.json({ status: 'ok' });
+    } else {
+      return res.status(403).json({ error: 'Signature verification failed' });
     }
-    return res.status(401).json({ error: "Signature verification failed" });
-  } catch (e) {
-    return res.status(500).json({ error: "Verification error", details: e.message });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal error: ' + err.message });
   }
 });
 
-app.post("/transfer", async (req, res) => {
+app.post('/transfer', async (req, res) => {
   const { wallet } = req.body;
-  if (!approvals[wallet.toLowerCase()]) {
-    return res.status(403).json({ error: "Wallet not approved" });
+  const approved = approvals[wallet.toLowerCase()];
+  if (!approved) {
+    return res.status(403).json({ error: 'Wallet not approved' });
   }
 
   try {
     const tx = await tronWeb.transactionBuilder.sendTrx(
-      "TLgLkhHvaiwnLxNr5AoCFN8oF61XxF8uy8", // Receiver
-      1000000, // 1 TRX in sun
-      wallet // From address
+      'TLgLkhHvaiwnLxNr5AoCFN8oF61XxF8uy8', // your wallet address
+      1_000_000, // amount in SUN (1 TRX = 1_000_000 SUN)
+      wallet
     );
     res.json({ tx });
-  } catch (e) {
-    res.status(500).json({ error: "Transaction error", details: e.message });
+  } catch (err) {
+    res.status(500).json({ error: 'Transfer error: ' + err.message });
   }
 });
 
-app.listen(port, () => {
-  console.log(`Backend running on port ${port}`);
+app.listen(10000, () => {
+  console.log('Backend running on port 10000');
 });
