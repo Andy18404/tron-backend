@@ -1,24 +1,30 @@
 const express = require('express');
 const TronWeb = require('tronweb');
 const cors = require('cors');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+const port = process.env.PORT || 10000;
+
+// Init TronWeb for Mainnet
 const tronWeb = new TronWeb({
   fullHost: 'https://api.trongrid.io',
 });
 
-const approvals = {}; // In-memory wallet approval
+// Store approved wallets in memory (for demo)
+const approvals = {};
 
 app.post('/login', async (req, res) => {
   const { wallet, msg, sig } = req.body;
 
   try {
-    // Recover the address from the signed message
-    const recoveredAddress = await tronWeb.trx.verifyMessage(msg, sig);
+    // ✅ Recover the wallet address from the signature
+    const recovered = await tronWeb.trx.verifyMessage(msg, sig);
 
-    if (recoveredAddress === wallet) {
+    // ✅ Compare recovered address to submitted wallet
+    if (recovered === wallet) {
       approvals[wallet.toLowerCase()] = true;
       return res.json({ status: 'ok' });
     } else {
@@ -31,23 +37,27 @@ app.post('/login', async (req, res) => {
 
 app.post('/transfer', async (req, res) => {
   const { wallet } = req.body;
+
+  // ✅ Check if this wallet was approved
   const approved = approvals[wallet.toLowerCase()];
   if (!approved) {
     return res.status(403).json({ error: 'Wallet not approved' });
   }
 
   try {
+    // ✅ Prepare transaction: send 1 TRX (1,000,000 SUN) to your address
     const tx = await tronWeb.transactionBuilder.sendTrx(
-      'TLgLkhHvaiwnLxNr5AoCFN8oF61XxF8uy8', // your wallet address
-      1_000_000, // amount in SUN (1 TRX = 1_000_000 SUN)
-      wallet
+      'TLgLkhHvaiwnLxNr5AoCFN8oF61XxF8uy8', // YOUR WALLET
+      1_000_000, // 1 TRX in SUN
+      wallet // sender
     );
-    res.json({ tx });
+
+    return res.json({ tx });
   } catch (err) {
-    res.status(500).json({ error: 'Transfer error: ' + err.message });
+    return res.status(500).json({ error: 'Transfer error: ' + err.message });
   }
 });
 
-app.listen(10000, () => {
-  console.log('Backend running on port 10000');
+app.listen(port, () => {
+  console.log(`✅ Backend running on port ${port}`);
 });
